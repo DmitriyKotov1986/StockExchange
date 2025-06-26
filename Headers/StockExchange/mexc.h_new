@@ -1,0 +1,81 @@
+#pragma once
+
+//STL
+#include <unordered_map>
+
+//Qt
+#include <QObject>
+#include <QByteArray>
+
+//My
+#include <Common/httpsslquery.h>
+#include <Common/websocketpool.h>
+
+#include <TradingCatCommon/klinehttppool.h>
+#include <TradingCatCommon/tradingdata.h>
+#include <TradingCatCommon/types.h>
+
+#include "StockExchange/istockexchange.h"
+#include "StockExchange/imoney.h"
+
+namespace StockExchange
+{
+
+class Mexc final
+    : public StockExchange::IStockExchange
+{
+    Q_OBJECT
+
+public:
+    static const TradingCatCommon::StockExchangeID STOCK_ID;
+
+public:
+    Mexc(const StockExchange::StockExchangeConfig& config, const Common::ProxyList& proxyList, QObject* parent = nullptr);
+    ~Mexc();
+
+    void start() override;
+    void stop() override;
+
+private slots:
+    void getAnswerHTTP(const QByteArray& answer, quint64 id);
+    void errorOccurredHTTP(QNetworkReply::NetworkError code, quint64 serverCode, const QString& msg, quint64 id, const QByteArray& answer);
+    void sendLogMsgHTTP(Common::TDBLoger::MSG_CODE category, const QString& msg, quint64 id);
+
+private:
+    Q_DISABLE_COPY_MOVE(Mexc);
+
+    void sendUpdateMoney(qint64 interval);
+    void sendGenerateListenKey(qint64 interval);
+    void sendGetListenKey(qint64 interval);
+
+    bool parseMoney(const QByteArray &answer);
+    bool parseGenerateListenKey(const QByteArray &answer);
+    bool parseGetListenKey(const QByteArray &answer);
+
+    void makeMoney();
+    void makeWebSocketConnection();
+
+private:
+    enum class ERequestType: quint8
+    {
+        UNDEFINED = 0,
+        GENERATE_LISTEN_KEY = 1,
+        GET_LISTEN_KEY = 2,
+        UPDATE_MONEY = 3
+    };
+
+    Common::HTTPSSLQuery* _http = nullptr; ///< Пул обработки http запросов
+    Common::WebSocketPool* _webSocketPool = nullptr; ///< Пул обработки WebSocket подписок
+    const StockExchange::StockExchangeConfig _config;
+    const Common::ProxyList _proxyList;
+
+    std::unordered_map<quint64, ERequestType> _currentRequest;
+
+    std::unordered_set<QString> _listenKeys;
+    TradingCatCommon::SymbolsList _symbols;
+    std::unordered_map<TradingCatCommon::Symbol, std::unique_ptr<StockExchange::IMoney>> _money;
+
+    bool _isStarted = false;
+};
+
+} // namespace StockExchange

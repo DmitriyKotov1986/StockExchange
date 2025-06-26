@@ -16,7 +16,7 @@
 namespace StockExchange
 {
 
-class Mexc final
+class BingxFutures final
     : public StockExchange::IStockExchange
 {
     Q_OBJECT
@@ -25,8 +25,8 @@ public:
     static const TradingCatCommon::StockExchangeID STOCK_ID;
 
 public:
-    Mexc(const StockExchange::StockExchangeConfig& config, const Common::ProxyList& proxyList, QObject* parent = nullptr);
-    ~Mexc() override;
+    BingxFutures(const StockExchange::StockExchangeConfig& config, const Common::ProxyList& proxyList, QObject* parent = nullptr);
+    ~BingxFutures() override;
 
     void start() override;
     void stop() override;
@@ -41,7 +41,7 @@ private slots:
     void sendLogMsgPool(Common::MSG_CODE category, const QString& msg);
 
 private:
-    Q_DISABLE_COPY_MOVE(Mexc);
+    Q_DISABLE_COPY_MOVE(BingxFutures);
 
     void sendUpdateMoney();
     void restartUpdateMoney();

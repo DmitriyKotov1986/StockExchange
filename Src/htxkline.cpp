@@ -136,7 +136,7 @@ PKLinesList HtxKLine::parseKLine(const QByteArray &answer)
     {
         result->clear();
 
-        emit sendLogMsg(IKLine::id(), TDBLoger::MSG_CODE::WARNING_CODE, QString("Error parsing KLine: %1 Source: %2").arg(err.what()).arg(answer));
+        emit sendLogMsg(IKLine::id(), MSG_CODE::WARNING_CODE, QString("Error parsing KLine: %1 Source: %2").arg(err.what()).arg(answer));
 
         return result;
     }
@@ -171,7 +171,7 @@ void HtxKLine::errorOccurredHTTP(QNetworkReply::NetworkError code, quint64 serve
 
     _currentRequestId = 0;
 
-    emit sendLogMsg(IKLine::id(), TDBLoger::MSG_CODE::WARNING_CODE, QString("KLine %1: Error get data from HTTP server: %2").arg(IKLine::id().toString()).arg(msg));
+    emit sendLogMsg(IKLine::id(), MSG_CODE::WARNING_CODE, QString("KLine %1: Error get data from HTTP server: %2").arg(IKLine::id().toString()).arg(msg));
 
     //429 To many request
     if (serverCode >= 400 || code == QNetworkReply::OperationCanceledError)
@@ -196,8 +196,8 @@ void HtxKLine::start()
                      SLOT(getAnswerHTTP(const QByteArray&, quint64)));
     QObject::connect(http, SIGNAL(errorOccurred(QNetworkReply::NetworkError, quint64, const QString&, quint64, const QByteArray&)),
                      SLOT(errorOccurredHTTP(QNetworkReply::NetworkError, quint64, const QString&, quint64, const QByteArray&)));
-    QObject::connect(http, SIGNAL(sendLogMsg(Common::TDBLoger::MSG_CODE, const QString&, quint64)),
-                     SLOT(sendLogMsgHTTP(Common::TDBLoger::MSG_CODE, const QString&, quint64)));
+    QObject::connect(http, SIGNAL(sendLogMsg(Common::MSG_CODE, const QString&, quint64)),
+                     SLOT(sendLogMsgHTTP(Common::MSG_CODE, const QString&, quint64)));
 
     _isStarted = true;
 
@@ -214,7 +214,7 @@ void HtxKLine::stop()
     _isStarted = false;
 }
 
-void HtxKLine::sendLogMsgHTTP(Common::TDBLoger::MSG_CODE category, const QString &msg, quint64 id)
+void HtxKLine::sendLogMsgHTTP(Common::MSG_CODE category, const QString &msg, quint64 id)
 {
     Q_UNUSED(id);
 

@@ -108,7 +108,7 @@ PKLinesList MoexKLine::parseKLine(const QByteArray &answer)
         const auto request_error = candlesJson["error"];
         if (!request_error.isNull() && request_error.isString())
         {
-            emit sendLogMsg(id(), TDBLoger::MSG_CODE::WARNING_CODE, QString("Server return error: %1").arg(request_error.toString()));
+            emit sendLogMsg(id(), MSG_CODE::WARNING_CODE, QString("Server return error: %1").arg(request_error.toString()));
 
             return {};
         }
@@ -241,7 +241,7 @@ PKLinesList MoexKLine::parseKLine(const QByteArray &answer)
             }
             else
             {
-                emit sendLogMsg(id(), TDBLoger::MSG_CODE::WARNING_CODE,
+                emit sendLogMsg(id(), MSG_CODE::WARNING_CODE,
                                 QString("The KLine received is earlier than the existing one. Received: %1 Existing: %2")
                                     .arg(QDateTime::fromMSecsSinceEpoch(tmp->closeTime).toString(DATETIME_FORMAT))
                                     .arg(QDateTime::fromMSecsSinceEpoch(_lastClose).toString(DATETIME_FORMAT)));
@@ -257,7 +257,7 @@ PKLinesList MoexKLine::parseKLine(const QByteArray &answer)
     {
         result->clear();
 
-        emit sendLogMsg(id(), TDBLoger::MSG_CODE::WARNING_CODE, QString("Error parse JSON candles: %1. Data: %2").arg(err.what()).arg(answer));
+        emit sendLogMsg(id(), MSG_CODE::WARNING_CODE, QString("Error parse JSON candles: %1. Data: %2").arg(err.what()).arg(answer));
 
         return result;
     }
@@ -292,7 +292,7 @@ void MoexKLine::errorOccurredHTTP(QNetworkReply::NetworkError code, quint64 serv
 
     _currentRequestId = 0;
 
-    emit sendLogMsg(IKLine::id(), TDBLoger::MSG_CODE::WARNING_CODE, QString("KLine %1: Error get data from HTTP server: %2").arg(IKLine::id().toString()).arg(msg));
+    emit sendLogMsg(IKLine::id(), MSG_CODE::WARNING_CODE, QString("KLine %1: Error get data from HTTP server: %2").arg(IKLine::id().toString()).arg(msg));
 
     //429 To many request
     if (serverCode >= 400 || code == QNetworkReply::OperationCanceledError)
@@ -317,8 +317,8 @@ void MoexKLine::start()
                      SLOT(getAnswerHTTP(const QByteArray&, quint64)));
     QObject::connect(http, SIGNAL(errorOccurred(QNetworkReply::NetworkError, quint64, const QString&, quint64, const QByteArray&)),
                      SLOT(errorOccurredHTTP(QNetworkReply::NetworkError, quint64, const QString&, quint64, const QByteArray&)));
-    QObject::connect(http, SIGNAL(sendLogMsg(Common::TDBLoger::MSG_CODE, const QString&, quint64)),
-                     SLOT(sendLogMsgHTTP(Common::TDBLoger::MSG_CODE, const QString&, quint64)));
+    QObject::connect(http, SIGNAL(sendLogMsg(Common::MSG_CODE, const QString&, quint64)),
+                     SLOT(sendLogMsgHTTP(Common::MSG_CODE, const QString&, quint64)));
 
     _isStarted = true;
 
@@ -335,7 +335,7 @@ void MoexKLine::stop()
     _isStarted = false;
 }
 
-void MoexKLine::sendLogMsgHTTP(Common::TDBLoger::MSG_CODE category, const QString &msg, quint64 id)
+void MoexKLine::sendLogMsgHTTP(Common::MSG_CODE category, const QString &msg, quint64 id)
 {
     Q_UNUSED(id);
 

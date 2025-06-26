@@ -11,30 +11,29 @@
 //My
 #include <Common/parser.h>
 
-#include "StockExchange/bitmartkline.h"
+#include "StockExchange/bingxklinefutures.h"
 
 using namespace TradingCatCommon;
 using namespace Common;
 using namespace StockExchange;
 
-Q_GLOBAL_STATIC_WITH_ARGS(const QUrl, BASE_URL, ("https://api-cloud.bitmart.com/"));
+Q_GLOBAL_STATIC_WITH_ARGS(const QUrl, BASE_URL, ("https://open-api.bingx.com/"));
 static const quint64 MIN_REQUEST_PERION = 60 * 1000; // 5min
 static const quint64 MIN_REQUEST_PERION_429 = 10 * 60 * 1000; //10 min
 
-QString BitmartKLine::KLineTypeToString(TradingCatCommon::KLineType type)
+QString BingxKLineFutures::KLineTypeToString(TradingCatCommon::KLineType type)
 {
-    // [1, 5, 15, 30, 60, 120, 240, 1440, 10080, 43200]
     switch (type)
     {
-    case KLineType::MIN1: return "1";
-    case KLineType::MIN5: return "5";
-    case KLineType::MIN15: return "15";
-    case KLineType::MIN30: return "30";
-    case KLineType::MIN60: return "60";
-    case KLineType::HOUR4: return "240";
-    case KLineType::HOUR8: return "1440";
-    case KLineType::DAY1: return "10080";
-    case KLineType::WEEK1: return "43200";
+    case KLineType::MIN1: return "1m";
+    case KLineType::MIN5: return "5m";
+    case KLineType::MIN15: return "15m";
+    case KLineType::MIN30: return "30m";
+    case KLineType::MIN60: return "1h";
+    case KLineType::HOUR4: return "4h";
+    case KLineType::HOUR8: return "8h";
+    case KLineType::DAY1: return "1d";
+    case KLineType::WEEK1: return "1w";
     default:
         Q_ASSERT(false);
     }
@@ -42,7 +41,7 @@ QString BitmartKLine::KLineTypeToString(TradingCatCommon::KLineType type)
     return "UNKNOW";
 }
 
-BitmartKLine::BitmartKLine(const TradingCatCommon::KLineID &id, const QDateTime& lastClose, QObject *parent /* = nullptr */)
+BingxKLineFutures::BingxKLineFutures(const TradingCatCommon::KLineID &id, const QDateTime& lastClose, QObject *parent /* = nullptr */)
     : IKLine(id, parent)
     , _lastClose(lastClose.addMSecs(static_cast<quint64>(IKLine::id().type) / 2).toMSecsSinceEpoch())
 {
@@ -50,7 +49,7 @@ BitmartKLine::BitmartKLine(const TradingCatCommon::KLineID &id, const QDateTime&
     Q_ASSERT(id.type == KLineType::MIN1 || id.type == KLineType::MIN5);
 }
 
-void BitmartKLine::sendGetKline()
+void BingxKLineFutures::sendGetKline()
 {
     Q_ASSERT(_currentRequestId == 0);
     Q_ASSERT(_isStarted);
@@ -58,37 +57,35 @@ void BitmartKLine::sendGetKline()
     //Запрашиваем немного больше свечей чтобы компенсировать разницу часов между сервером и биржей
     //лишнии свечи отбросим при парсинге
     quint32 count = ((QDateTime::currentDateTime().toMSecsSinceEpoch() - _lastClose) / static_cast<quint64>(IKLine::id().type)) + 10;
-    if (count > 200)
+    if (count > 1400)
     {
-        count = 200;
+        count = 1400;
     }
 
     QUrlQuery urlQuery;
     urlQuery.addQueryItem("symbol", id().symbol.name);
-    urlQuery.addQueryItem("step", KLineTypeToString(IKLine::id().type));
-    //urlQuery.addQueryItem("after", QString::number(_lastClose / 1000));
+    urlQuery.addQueryItem("interval", KLineTypeToString(IKLine::id().type));
     urlQuery.addQueryItem("limit", QString::number(count));
 
     QUrl url(*BASE_URL);
-    url.setPath("/spot/quotation/v3/lite-klines");
+    url.setPath("/openApi/swap/v3/quote/klines");
     url.setQuery(urlQuery);
 
     auto http = getHTTP();
     _currentRequestId = http->send(url, Common::HTTPSSLQuery::RequestType::GET);
 }
 
-PKLinesList BitmartKLine::parseKLine(const QByteArray &answer)
+PKLinesList BingxKLineFutures::parseKLine(const QByteArray &answer)
 {
     PKLinesList result = std::make_shared<KLinesList>();
 
     try
     {
         const auto rootJson = JSONParseToMap(answer);
-
-        const auto code = JSONReadMapNumber<qint64>(rootJson, "code", "Root/code").value_or(1000); //1000 is OK code
-        if (code != 1000)
+        const auto code = JSONReadMapNumber<qint64>(rootJson, "code", "Root/code").value_or(0);
+        if (code != 0)
         {
-            const auto msg = JSONReadMapString(rootJson, "message", "Root/message").value_or("");
+            const auto msg = JSONReadMapString(rootJson, "msg", "Root/msg").value_or("");
 
             throw ParseException(QString("Stock exchange return error. Code: %1 Message: %2").arg(code).arg(msg));
         }
@@ -102,11 +99,11 @@ PKLinesList BitmartKLine::parseKLine(const QByteArray &answer)
 
         //Последняя свеча может быть некорректно сформирована, поэтму в следующий раз нам надо получить ее еще раз
         const auto it_dataPreEnd = std::prev(data.end());
-        for (auto it_data = data.begin(); it_data != it_dataPreEnd; ++it_data)
+        for (auto it_data = it_dataPreEnd; it_data != data.begin(); --it_data)
         {
-            const auto data = JSONReadArray(*it_data, "Root/data/[]");
+            const auto kline = JSONReadMap(*it_data, "Root/data/[]");
 
-            const auto openDateTime = data[0].toString().toLongLong() * 1000;
+            const auto openDateTime = JSONReadMapNumber<qint64>(kline, "time", "Root/data/[]/time", 0).value_or(0);
             const auto closeDateTime = openDateTime + static_cast<qint64>(IKLine::id().type);
 
             //отсеиваем лишнии свечи
@@ -117,24 +114,14 @@ PKLinesList BitmartKLine::parseKLine(const QByteArray &answer)
 
             auto tmp = std::make_shared<KLine>();
             tmp->openTime = openDateTime;
-            tmp->open = data[1].toString().toFloat();
-            tmp->high = data[2].toString().toFloat();
-            tmp->low = data[3].toString().toFloat();
-            tmp->close = data[4].toString().toFloat();
-            tmp->volume = data[5].toString().toFloat();
-            tmp->quoteAssetVolume = data[6].toString().toFloat();
+            tmp->open = JSONReadMapNumber<double>(kline, "open", "Root/data/[]/open", 0.0f).value_or(0.0f);
+            tmp->high = JSONReadMapNumber<double>(kline, "high", "Root/data/[]/high", 0.0f).value_or(0.0f);
+            tmp->low = JSONReadMapNumber<double>(kline, "low", "Root/data/[]/low", 0.0f).value_or(0.0f);
+            tmp->close = JSONReadMapNumber<double>(kline, "close", "Root/data/[]/close", 0.0f).value_or(0.0f);
+            tmp->volume =JSONReadMapNumber<double>(kline, "volume", "Root/data/[]/volume", 0.0f).value_or(0.0f);
+            tmp->quoteAssetVolume = JSONReadMapNumber<double>(kline, "volume", "Root/data/[]/volume", 0.0f).value_or(0.0f);
             tmp->closeTime = closeDateTime;
             tmp->id = IKLine::id();
-
-            // qWarning() << "Bitmart: " << tmp->openTime <<
-            //     QDateTime::fromMSecsSinceEpoch(tmp->openTime).toString("hh:mm") <<
-            //     tmp->id.toString() <<
-            //     tmp->deltaKLine() <<
-            //     tmp->volumeKLine() <<
-            //     "O:" << tmp->open <<
-            //     "H:" << tmp->high <<
-            //     "L:" << tmp->low <<
-            //     "C:" << tmp->close;
 
             result->emplace_back(std::move(tmp));
 
@@ -154,7 +141,7 @@ PKLinesList BitmartKLine::parseKLine(const QByteArray &answer)
     return result;
 }
 
-void BitmartKLine::getAnswerHTTP(const QByteArray &answer, quint64 id)
+void BingxKLineFutures::getAnswerHTTP(const QByteArray &answer, quint64 id)
 {
     if (id != _currentRequestId)
     {
@@ -170,7 +157,7 @@ void BitmartKLine::getAnswerHTTP(const QByteArray &answer, quint64 id)
     QTimer::singleShot(type * 2, this, [this](){ this->sendGetKline(); });
 }
 
-void BitmartKLine::errorOccurredHTTP(QNetworkReply::NetworkError code, quint64 serverCode, const QString &msg, quint64 id, const QByteArray& answer)
+void BingxKLineFutures::errorOccurredHTTP(QNetworkReply::NetworkError code, quint64 serverCode, const QString &msg, quint64 id, const QByteArray& answer)
 {
     Q_UNUSED(code);
 
@@ -181,18 +168,19 @@ void BitmartKLine::errorOccurredHTTP(QNetworkReply::NetworkError code, quint64 s
 
     _currentRequestId = 0;
 
+    QString errorMsg = "EMPTY";
     if (!answer.isEmpty())
     {
         try
         {
             const auto rootJson = JSONParseToMap(answer);
 
-            const auto errCode = JSONReadMapNumber<qint64>(rootJson, "code", "Root/code").value_or(1000); //1000 is OK code
-            if (errCode  != 1000)
+            if (rootJson.contains("code"))
             {
-                const auto msg = JSONReadMapString(rootJson, "message", "Root/message").value_or("");
+                const auto code = JSONReadMapNumber<qint64>(rootJson, "code", "Root/code").value_or(0);
+                const auto msg = JSONReadMapString(rootJson, "msg", "Root/msg").value_or("");
 
-                emit sendLogMsg(IKLine::id(), Common::MSG_CODE::WARNING_CODE, QString("Stock exchange return error. Code: %1 Message: %2").arg(code).arg(msg));
+                errorMsg = QString("Stock exchange return error. Code: %1 Message: %2").arg(code).arg(msg);
             }
         }
         catch (const ParseException& err)
@@ -201,7 +189,7 @@ void BitmartKLine::errorOccurredHTTP(QNetworkReply::NetworkError code, quint64 s
         }
     }
 
-    emit sendLogMsg(IKLine::id(), MSG_CODE::WARNING_CODE, QString("KLine %1: Error get data from HTTP server: %2").arg(IKLine::id().toString()).arg(msg));
+    emit sendLogMsg(IKLine::id(), Common::MSG_CODE::WARNING_CODE, QString("HTTP request %1 failed with an error: %2. Addition data: %3. Retry after %4s").arg(id).arg(msg).arg(errorMsg).arg(MIN_REQUEST_PERION_429 / 1000));
 
     //429 To many request
     if (serverCode >= 400 || code == QNetworkReply::OperationCanceledError)
@@ -216,7 +204,7 @@ void BitmartKLine::errorOccurredHTTP(QNetworkReply::NetworkError code, quint64 s
                        [this](){ this->sendGetKline(); });
 }
 
-void BitmartKLine::start()
+void BingxKLineFutures::start()
 {
     auto http = getHTTP();
 
@@ -234,7 +222,7 @@ void BitmartKLine::start()
     sendGetKline();
 }
 
-void BitmartKLine::stop()
+void BingxKLineFutures::stop()
 {
     if (!_isStarted)
     {
@@ -244,7 +232,7 @@ void BitmartKLine::stop()
     _isStarted = false;
 }
 
-void BitmartKLine::sendLogMsgHTTP(Common::MSG_CODE category, const QString &msg, quint64 id)
+void BingxKLineFutures::sendLogMsgHTTP(Common::MSG_CODE category, const QString &msg, quint64 id)
 {
     Q_UNUSED(id);
 

@@ -68,7 +68,7 @@ void BingxKLine::sendGetKline()
     urlQuery.addQueryItem("limit", QString::number(count));
 
     QUrl url(*BASE_URL);
-    url.setPath("/openApi/swap/v3/quote/klines");
+    url.setPath("/openApi/spot/v2/market/kline");
     url.setQuery(urlQuery);
 
     auto http = getHTTP();
@@ -82,6 +82,14 @@ PKLinesList BingxKLine::parseKLine(const QByteArray &answer)
     try
     {
         const auto rootJson = JSONParseToMap(answer);
+        const auto code = JSONReadMapNumber<qint64>(rootJson, "code", "Root/code").value_or(0);
+        if (code != 0)
+        {
+            const auto msg = JSONReadMapString(rootJson, "msg", "Root/msg").value_or("");
+
+            throw ParseException(QString("Stock exchange return error. Code: %1 Message: %2").arg(code).arg(msg));
+        }
+
         const auto data = JSONReadMapToArray(rootJson, "data", "Root/data");
 
         if (data.size() < 2)
@@ -93,9 +101,9 @@ PKLinesList BingxKLine::parseKLine(const QByteArray &answer)
         const auto it_dataPreEnd = std::prev(data.end());
         for (auto it_data = it_dataPreEnd; it_data != data.begin(); --it_data)
         {
-            const auto kline = JSONReadMap(*it_data, "Root/data/[]");
+            const auto kline = JSONReadArray(*it_data, "Root/data/[]");
 
-            const auto openDateTime = JSONReadMapNumber<qint64>(kline, "time", "Root/data/[]/time", 0).value_or(0);
+            const auto openDateTime = kline[0].toInteger();
             const auto closeDateTime = openDateTime + static_cast<qint64>(IKLine::id().type);
 
             //отсеиваем лишнии свечи
@@ -106,12 +114,12 @@ PKLinesList BingxKLine::parseKLine(const QByteArray &answer)
 
             auto tmp = std::make_shared<KLine>();
             tmp->openTime = openDateTime;
-            tmp->open = JSONReadMapNumber<double>(kline, "open", "Root/data/[]/open", 0.0f).value_or(0.0f);
-            tmp->high = JSONReadMapNumber<double>(kline, "high", "Root/data/[]/high", 0.0f).value_or(0.0f);
-            tmp->low = JSONReadMapNumber<double>(kline, "low", "Root/data/[]/low", 0.0f).value_or(0.0f);
-            tmp->close = JSONReadMapNumber<double>(kline, "close", "Root/data/[]/close", 0.0f).value_or(0.0f);
-            tmp->volume =JSONReadMapNumber<double>(kline, "volume", "Root/data/[]/volume", 0.0f).value_or(0.0f);
-            tmp->quoteAssetVolume = JSONReadMapNumber<double>(kline, "volume", "Root/data/[]/volume", 0.0f).value_or(0.0f);
+            tmp->open = kline[1].toDouble();
+            tmp->high = kline[2].toDouble();
+            tmp->low = kline[3].toDouble();
+            tmp->close = kline[4].toDouble();
+            tmp->volume = kline[5].toDouble();
+            tmp->quoteAssetVolume = kline[7].toDouble();
             tmp->closeTime = closeDateTime;
             tmp->id = IKLine::id();
 
@@ -125,7 +133,7 @@ PKLinesList BingxKLine::parseKLine(const QByteArray &answer)
     {
         result->clear();
 
-        emit sendLogMsg(IKLine::id(), TDBLoger::MSG_CODE::WARNING_CODE, QString("Error parsing KLine: %1 Source: %2").arg(err.what()).arg(answer));
+        emit sendLogMsg(IKLine::id(), MSG_CODE::WARNING_CODE, QString("Error parsing KLine: %1 Source: %2").arg(err.what()).arg(answer));
 
         return result;
     }
@@ -160,7 +168,28 @@ void BingxKLine::errorOccurredHTTP(QNetworkReply::NetworkError code, quint64 ser
 
     _currentRequestId = 0;
 
-    emit sendLogMsg(IKLine::id(), TDBLoger::MSG_CODE::WARNING_CODE, QString("KLine %1: Error get data from HTTP server: %2").arg(IKLine::id().toString()).arg(msg));
+    QString errorMsg = "EMPTY";
+    if (!answer.isEmpty())
+    {
+        try
+        {
+            const auto rootJson = JSONParseToMap(answer);
+
+            if (rootJson.contains("code"))
+            {
+                const auto code = JSONReadMapNumber<qint64>(rootJson, "code", "Root/code").value_or(0);
+                const auto msg = JSONReadMapString(rootJson, "msg", "Root/msg").value_or("");
+
+                errorMsg = QString("Stock exchange return error. Code: %1 Message: %2").arg(code).arg(msg);
+            }
+        }
+        catch (const ParseException& err)
+        {
+            emit sendLogMsg(IKLine::id(), MSG_CODE::WARNING_CODE, QString("Error parse JSON error data: %1. Source data: %2").arg(err.what()).arg(answer));
+        }
+    }
+
+    emit sendLogMsg(IKLine::id(), Common::MSG_CODE::WARNING_CODE, QString("HTTP request %1 failed with an error: %2. Addition data: %3. Retry after %4s").arg(id).arg(msg).arg(errorMsg).arg(MIN_REQUEST_PERION_429 / 1000));
 
     //429 To many request
     if (serverCode >= 400 || code == QNetworkReply::OperationCanceledError)
@@ -185,8 +214,8 @@ void BingxKLine::start()
                      SLOT(getAnswerHTTP(const QByteArray&, quint64)));
     QObject::connect(http, SIGNAL(errorOccurred(QNetworkReply::NetworkError, quint64, const QString&, quint64, const QByteArray&)),
                      SLOT(errorOccurredHTTP(QNetworkReply::NetworkError, quint64, const QString&, quint64, const QByteArray&)));
-    QObject::connect(http, SIGNAL(sendLogMsg(Common::TDBLoger::MSG_CODE, const QString&, quint64)),
-                     SLOT(sendLogMsgHTTP(Common::TDBLoger::MSG_CODE, const QString&, quint64)));
+    QObject::connect(http, SIGNAL(sendLogMsg(Common::MSG_CODE, const QString&, quint64)),
+                     SLOT(sendLogMsgHTTP(Common::MSG_CODE, const QString&, quint64)));
 
     _isStarted = true;
 
@@ -203,7 +232,7 @@ void BingxKLine::stop()
     _isStarted = false;
 }
 
-void BingxKLine::sendLogMsgHTTP(Common::TDBLoger::MSG_CODE category, const QString &msg, quint64 id)
+void BingxKLine::sendLogMsgHTTP(Common::MSG_CODE category, const QString &msg, quint64 id)
 {
     Q_UNUSED(id);
 

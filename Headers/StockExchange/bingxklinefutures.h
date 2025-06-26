@@ -12,21 +12,21 @@
 namespace StockExchange
 {
 
-class MexcKLine
+class BingxKLineFutures
     : public TradingCatCommon::IKLine
 {
     Q_OBJECT
 
 public:
-    MexcKLine(const TradingCatCommon::KLineID& id, const QDateTime& lastClose, const QString& secretKey = QString(), QObject* parent = nullptr);
-    ~MexcKLine() override = default;
+    BingxKLineFutures(const TradingCatCommon::KLineID& id, const QDateTime& lastClose, QObject* parent = nullptr);
+    ~BingxKLineFutures() override = default;
 
     void start() override;
     void stop() override;
 
 private:
-    MexcKLine() = delete;
-    Q_DISABLE_COPY_MOVE(MexcKLine);
+    BingxKLineFutures() = delete;
+    Q_DISABLE_COPY_MOVE(BingxKLineFutures);
 
     static QString KLineTypeToString(TradingCatCommon::KLineType type);
 
@@ -43,8 +43,6 @@ private:
     bool _isStarted = false;
 
     qint64 _lastClose = 0;
-
-    const QString _secretKey;
 
 };
 

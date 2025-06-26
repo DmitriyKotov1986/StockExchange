@@ -30,7 +30,7 @@ const StockExchangeID Binance::STOCK_ID("BINANCE");
 ///////////////////////////////////////////////////////////////////////////////
 /// class Binance
 ///
-Binance::Binance(const StockExchange::StockExchangeConfig& config, const Common::HTTPSSLQuery::ProxyList& proxyList, QObject *parent)
+Binance::Binance(const StockExchange::StockExchangeConfig& config, const Common::ProxyList& proxyList, QObject *parent)
     : IStockExchange{STOCK_ID, parent}
     , _config(config)
     , _proxyList(proxyList)
@@ -54,8 +54,8 @@ void Binance::start()
                      SLOT(getAnswerHTTP(const QByteArray&, quint64)));
     QObject::connect(_http, SIGNAL(errorOccurred(QNetworkReply::NetworkError, quint64, const QString&, quint64, const QByteArray&)),
                      SLOT(errorOccurredHTTP(QNetworkReply::NetworkError, quint64, const QString&, quint64, const QByteArray&)));
-    QObject::connect(_http, SIGNAL(sendLogMsg(Common::TDBLoger::MSG_CODE, const QString&, quint64)),
-                     SLOT(sendLogMsgHTTP(Common::TDBLoger::MSG_CODE, const QString&, quint64)));
+    QObject::connect(_http, SIGNAL(sendLogMsg(Common::MSG_CODE, const QString&, quint64)),
+                     SLOT(sendLogMsgHTTP(Common::MSG_CODE, const QString&, quint64)));
 
     if (!_pool)
     {
@@ -65,8 +65,8 @@ void Binance::start()
                          SLOT(getKLinesPool(const TradingCatCommon::PKLinesList&)));
         QObject::connect(_pool, SIGNAL(errorOccurred(Common::EXIT_CODE, const QString&)),
                          SLOT(errorOccurredPool(Common::EXIT_CODE, const QString&)));
-        QObject::connect(_pool, SIGNAL(sendLogMsg(Common::TDBLoger::MSG_CODE, const QString&)),
-                         SLOT(sendLogMsgPool(Common::TDBLoger::MSG_CODE, const QString&)));
+        QObject::connect(_pool, SIGNAL(sendLogMsg(Common::MSG_CODE, const QString&)),
+                         SLOT(sendLogMsgPool(Common::MSG_CODE, const QString&)));
 
         if (!_config.user.isEmpty())
         {
@@ -137,11 +137,11 @@ void Binance::errorOccurredHTTP(QNetworkReply::NetworkError code, quint64 server
         }
         catch (const ParseException& err)
         {
-            emit sendLogMsg(STOCK_ID, TDBLoger::MSG_CODE::WARNING_CODE, QString("Error parse JSON error data: %1. Source data: %2").arg(err.what()).arg(answer));
+            emit sendLogMsg(STOCK_ID, MSG_CODE::WARNING_CODE, QString("Error parse JSON error data: %1. Source data: %2").arg(err.what()).arg(answer));
         }
     }
 
-    emit sendLogMsg(STOCK_ID, Common::TDBLoger::MSG_CODE::WARNING_CODE,
+    emit sendLogMsg(STOCK_ID, Common::MSG_CODE::WARNING_CODE,
                     QString("HTTP request %1 failed with an error: %2. Addition data: %3. Retry after %4s")
                         .arg(id)
                         .arg(msg)
@@ -151,7 +151,7 @@ void Binance::errorOccurredHTTP(QNetworkReply::NetworkError code, quint64 server
     restartUpdateMoney();
 }
 
-void Binance::sendLogMsgHTTP(Common::TDBLoger::MSG_CODE category, const QString &msg, quint64 id)
+void Binance::sendLogMsgHTTP(Common::MSG_CODE category, const QString &msg, quint64 id)
 {
     emit sendLogMsg(STOCK_ID, category, QString("HTTP request %1: %2").arg(id).arg(msg));
 }
@@ -170,7 +170,7 @@ void Binance::getKLinesPool(const TradingCatCommon::PKLinesList &klines)
         end = std::max(end, kline->closeTime);
     }
 
-    emit sendLogMsg(STOCK_ID, Common::TDBLoger::MSG_CODE::INFORMATION_CODE, QString("Get new klines: %1. Count: %2 from %3 to %4")
+    emit sendLogMsg(STOCK_ID, Common::MSG_CODE::INFORMATION_CODE, QString("Get new klines: %1. Count: %2 from %3 to %4")
                                                                                 .arg(klines->begin()->get()->id.toString())
                                                                                 .arg(klines->size())
                                                                                 .arg(QDateTime::fromMSecsSinceEpoch(start).toString(SIMPLY_DATETIME_FORMAT))
@@ -185,7 +185,7 @@ void Binance::errorOccurredPool(Common::EXIT_CODE errorCode, const QString &erro
     emit errorOccurred(STOCK_ID, errorCode, QString("KLines Pool error: %1").arg(errorString));
 }
 
-void Binance::sendLogMsgPool(Common::TDBLoger::MSG_CODE category, const QString &msg)
+void Binance::sendLogMsgPool(Common::MSG_CODE category, const QString &msg)
 {
     emit sendLogMsg(STOCK_ID, category, QString("KLines Pool: %1").arg(msg));
 }
@@ -285,14 +285,14 @@ void Binance::parseMoney(const QByteArray &answer)
     }
     catch (const ParseException& err)
     {
-        emit sendLogMsg(STOCK_ID, TDBLoger::MSG_CODE::WARNING_CODE, QString("Error parse JSON money list: %1").arg(err.what()));
+        emit sendLogMsg(STOCK_ID, MSG_CODE::WARNING_CODE, QString("Error parse JSON money list: %1").arg(err.what()));
 
         restartUpdateMoney();
 
         return;
     }
 
-    emit sendLogMsg(STOCK_ID, TDBLoger::MSG_CODE::INFORMATION_CODE, QString("The earch for the list of money list complite successfully"));
+    emit sendLogMsg(STOCK_ID, MSG_CODE::INFORMATION_CODE, QString("The earch for the list of money list complite successfully"));
 
     makeKLines(money);
 
@@ -346,7 +346,7 @@ void Binance::makeKLines(const TradingCatCommon::PKLinesIDList klinesIdList)
         }
     }
 
-    emit sendLogMsg(STOCK_ID, TDBLoger::MSG_CODE::INFORMATION_CODE, QString("KLines list update successfully. Added: %1. Erased: %2. Total: %3")
+    emit sendLogMsg(STOCK_ID, MSG_CODE::INFORMATION_CODE, QString("KLines list update successfully. Added: %1. Erased: %2. Total: %3")
                                                                         .arg(addKLineCount)
                                                                         .arg(eraseKLineCount)
                                                                         .arg(_pool->klineCount()));

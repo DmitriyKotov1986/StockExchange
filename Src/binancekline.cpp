@@ -135,7 +135,7 @@ PKLinesList BinanceKLine::parseKLine(const QByteArray &answer)
     {
         result->clear();
 
-        emit sendLogMsg(IKLine::id(), TDBLoger::MSG_CODE::WARNING_CODE, QString("Error parsing KLine: %1 Source: %2").arg(err.what()).arg(answer));
+        emit sendLogMsg(IKLine::id(), MSG_CODE::WARNING_CODE, QString("Error parsing KLine: %1 Source: %2").arg(err.what()).arg(answer));
 
         return result;
     }
@@ -187,11 +187,11 @@ void BinanceKLine::errorOccurredHTTP(QNetworkReply::NetworkError code, quint64 s
         }
         catch (const ParseException& err)
         {
-            emit sendLogMsg(IKLine::id(), TDBLoger::MSG_CODE::WARNING_CODE, QString("Error parse JSON error data: %1. Source data: %2").arg(err.what()).arg(answer));
+            emit sendLogMsg(IKLine::id(), MSG_CODE::WARNING_CODE, QString("Error parse JSON error data: %1. Source data: %2").arg(err.what()).arg(answer));
         }
     }
 
-    emit sendLogMsg(IKLine::id(), Common::TDBLoger::MSG_CODE::WARNING_CODE, QString("HTTP request %1 failed with an error: %2. Addition data: %3. Retry after %4s").arg(id).arg(msg).arg(errorMsg).arg(MIN_REQUEST_PERION_429 / 1000));
+    emit sendLogMsg(IKLine::id(), Common::MSG_CODE::WARNING_CODE, QString("HTTP request %1 failed with an error: %2. Addition data: %3. Retry after %4s").arg(id).arg(msg).arg(errorMsg).arg(MIN_REQUEST_PERION_429 / 1000));
 
     //429 To many request
     if (serverCode >= 400 || serverCode == 418 || code == QNetworkReply::OperationCanceledError)
@@ -216,8 +216,8 @@ void BinanceKLine::start()
                      SLOT(getAnswerHTTP(const QByteArray&, quint64)));
     QObject::connect(http, SIGNAL(errorOccurred(QNetworkReply::NetworkError, quint64, const QString&, quint64, const QByteArray&)),
                      SLOT(errorOccurredHTTP(QNetworkReply::NetworkError, quint64, const QString&, quint64, const QByteArray&)));
-    QObject::connect(http, SIGNAL(sendLogMsg(Common::TDBLoger::MSG_CODE, const QString&, quint64)),
-                     SLOT(sendLogMsgHTTP(Common::TDBLoger::MSG_CODE, const QString&, quint64)));
+    QObject::connect(http, SIGNAL(sendLogMsg(Common::MSG_CODE, const QString&, quint64)),
+                     SLOT(sendLogMsgHTTP(Common::MSG_CODE, const QString&, quint64)));
 
     _isStarted = true;
 
@@ -234,7 +234,7 @@ void BinanceKLine::stop()
     _isStarted = false;
 }
 
-void BinanceKLine::sendLogMsgHTTP(Common::TDBLoger::MSG_CODE category, const QString &msg, quint64 id)
+void BinanceKLine::sendLogMsgHTTP(Common::MSG_CODE category, const QString &msg, quint64 id)
 {
     Q_UNUSED(id);
 

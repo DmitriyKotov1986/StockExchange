@@ -19,6 +19,7 @@ class MoexKLine
 
 public:
     MoexKLine(const TradingCatCommon::KLineID& id, const QString& engines, const QString& markets, const QString& boards, const QDateTime& lastClose, QObject* parent = nullptr);
+    ~MoexKLine() override = default;
 
     void start() override;
     void stop() override;
@@ -35,7 +36,7 @@ private:
 private slots:
     void getAnswerHTTP(const QByteArray& answer, quint64 id);
     void errorOccurredHTTP(QNetworkReply::NetworkError code, quint64 serverCode, const QString& msg, quint64 id, const QByteArray& answer);
-    void sendLogMsgHTTP(Common::TDBLoger::MSG_CODE category, const QString& msg, quint64 id);
+    void sendLogMsgHTTP(Common::MSG_CODE category, const QString& msg, quint64 id);
 
 private:
     const QString _engines;

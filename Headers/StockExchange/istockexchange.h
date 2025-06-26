@@ -2,14 +2,17 @@
 
 //Qt
 #include <QObject>
+#include <QFlags>
 
 //My
 #include <Common/common.h>
 #include <Common/tdbloger.h>
 
-#include "TradingCatCommon/kline.h"
-#include "TradingCatCommon/stockexchange.h"
-#include "TradingCatCommon/orderbook.h"
+#include <TradingCatCommon/kline.h>
+#include <TradingCatCommon/symbol.h>
+#include <TradingCatCommon/stockexchange.h>
+#include <TradingCatCommon/orderbook.h>
+#include <TradingCatCommon/tradestream.h>
 
 #ifndef QT_NO_SSL
 
@@ -21,11 +24,24 @@ namespace StockExchange
 ///
 struct StockExchangeConfig
 {
+    enum ETypeGetData
+    {
+        UNDEFINED   = 0x00000000b,
+        KLINE       = 0x00000001b,
+        KLINE_LIFE  = 0x00000010b,
+        ORDER_BOOK  = 0x00000100b,
+        TRADING_STREAM = 0x00001000b
+    };
+
+    Q_DECLARE_FLAGS(ETypesGetDate, ETypeGetData);
+
     QString type;           ///< Тип биржи. Должен совпадать с названием биржи
     QString user;           ///< Имя пользователя или API key (зависит от биржи)
     QString password;       ///< Пароль или Secret key (зависит от биржи)
     TradingCatCommon::KLineTypes klineTypes = {TradingCatCommon::KLineType::MIN1, TradingCatCommon::KLineType::MIN5}; ///< Список интервалов свечей, которые необходимо получать с биржи
     QStringList klineNames; ///< Фильтр названия инструментов, которые нужно получать с биржи
+    ETypesGetDate typesGateData = ETypesGetDate(ETypeGetData::KLINE);
+
 };
 
 using StockExchangeConfigList = std::list<StockExchangeConfig>;   ///< Список конфигураций бирж
@@ -92,12 +108,24 @@ signals:
 
     /*!
         Полное обновление стакана заявок
-        @param stockExchangeId
-        @param orderBook
+        @param stockExchangeId - ИД биржи. Гарантируется что ИД биржи валидно и не пустое
+        @param orderBook - стакан заявок
     */
     void getOrderBook(const TradingCatCommon::StockExchangeID& stockExchangeId, const TradingCatCommon::Symbol& symbol, const TradingCatCommon::POrderBook& orderBook);
 
+    /*!
+        Сырые данные потока заявок
+        @param stockExchangeId - ИД биржи. Гарантируется что ИД биржи валидно и не пустое
+        @param tradingStreamData - сырые данные потока заявок
+    */
+    void getTradeStream(const TradingCatCommon::StockExchangeID& stockExchangeId, const TradingCatCommon::PTradeStreamData& tradingStreamData);
 
+    /*!
+        Дифференциальное изменение стакана заявок
+        @param stockExchangeId - ИД биржи. Гарантируется что ИД биржи валидно и не пустое
+        @param symbol - название монеты
+        @param diffOrderBook - имененеия в стакане заявок
+    */
     void getDiffOrderBook(const TradingCatCommon::StockExchangeID& stockExchangeId, const TradingCatCommon::Symbol& symbol,  const TradingCatCommon::POrderBook& diffOrderBook);
 
     /*!
@@ -114,7 +142,7 @@ signals:
         @param category - категория сообщения
         @param msg - текст сообщения
     */
-    void sendLogMsg(const TradingCatCommon::StockExchangeID& stockExchangeId, Common::TDBLoger::MSG_CODE category, const QString& msg);
+    void sendLogMsg(const TradingCatCommon::StockExchangeID& stockExchangeId, Common::MSG_CODE category, const QString& msg);
 
     /*!
         Сингал генерируется после остановки работы класса
@@ -132,6 +160,8 @@ private:
 };
 
 } // namespace StockExchange
+
+Q_DECLARE_OPERATORS_FOR_FLAGS(StockExchange::StockExchangeConfig::ETypesGetDate);
 
 #endif
 

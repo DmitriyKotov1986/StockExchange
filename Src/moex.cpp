@@ -27,7 +27,7 @@ const StockExchangeID Moex::STOCK_ID("MOEX");
 ///////////////////////////////////////////////////////////////////////////////
 /// class Moex
 ///
-Moex::Moex(const StockExchange::StockExchangeConfig& config, const Common::HTTPSSLQuery::ProxyList& proxyList, QObject *parent)
+Moex::Moex(const StockExchange::StockExchangeConfig& config, const Common::ProxyList& proxyList, QObject *parent)
     : IStockExchange{STOCK_ID, parent}
     , _config(config)
     , _proxyList(proxyList)
@@ -51,8 +51,8 @@ void Moex::start()
                      SLOT(getAnswerHTTP(const QByteArray&, quint64)));
     QObject::connect(_http, SIGNAL(errorOccurred(QNetworkReply::NetworkError, quint64, const QString&, quint64, const QByteArray&)),
                      SLOT(errorOccurredHTTP(QNetworkReply::NetworkError, quint64, const QString&, quint64, const QByteArray&)));
-    QObject::connect(_http, SIGNAL(sendLogMsg(Common::TDBLoger::MSG_CODE, const QString&, quint64)),
-                     SLOT(sendLogMsgHTTP(Common::TDBLoger::MSG_CODE, const QString&, quint64)));
+    QObject::connect(_http, SIGNAL(sendLogMsg(Common::MSG_CODE, const QString&, quint64)),
+                     SLOT(sendLogMsgHTTP(Common::MSG_CODE, const QString&, quint64)));
 
     if (!_pool)
     {
@@ -62,8 +62,8 @@ void Moex::start()
                          SLOT(getKLinesPool(const TradingCatCommon::PKLinesList&)));
         QObject::connect(_pool, SIGNAL(errorOccurred(Common::EXIT_CODE, const QString&)),
                          SLOT(errorOccurredPool(Common::EXIT_CODE, const QString&)));
-        QObject::connect(_pool, SIGNAL(sendLogMsg(Common::TDBLoger::MSG_CODE, const QString&)),
-                         SLOT(sendLogMsgPool(Common::TDBLoger::MSG_CODE, const QString&)));
+        QObject::connect(_pool, SIGNAL(sendLogMsg(Common::MSG_CODE, const QString&)),
+                         SLOT(sendLogMsgPool(Common::MSG_CODE, const QString&)));
 
 
         if (!_config.user.isEmpty())
@@ -113,7 +113,7 @@ void Moex::getAnswerHTTP(const QByteArray &answer, quint64 id)
     switch (it_request->second)
     {
     case RequestType::AUTH:
-        emit sendLogMsg(STOCK_ID, TDBLoger::MSG_CODE::INFORMATION_CODE, "Athentication on stock exchange was successfully");
+        emit sendLogMsg(STOCK_ID, MSG_CODE::INFORMATION_CODE, "Athentication on stock exchange was successfully");
         _headers.emplace("Authorization", QString("Bearer %1").arg(answer).toUtf8());
         _headers.emplace("Cookie", QString("MicexPassportCert=%1").arg(answer).toUtf8());
         _http->setHeaders(_headers);
@@ -134,7 +134,7 @@ void Moex::errorOccurredHTTP(QNetworkReply::NetworkError code, quint64 serverCod
     Q_UNUSED(code);
     Q_UNUSED(serverCode);
 
-    emit sendLogMsg(STOCK_ID, Common::TDBLoger::MSG_CODE::WARNING_CODE, QString("HTTP request %1 failed with an error: %2").arg(id).arg(msg));
+    emit sendLogMsg(STOCK_ID, Common::MSG_CODE::WARNING_CODE, QString("HTTP request %1 failed with an error: %2").arg(id).arg(msg));
 
     const auto it_request = _requests.find(id);
 
@@ -146,7 +146,7 @@ void Moex::errorOccurredHTTP(QNetworkReply::NetworkError code, quint64 serverCod
     switch (it_request->second)
     {
     case RequestType::AUTH:
-        emit sendLogMsg(STOCK_ID, TDBLoger::MSG_CODE::WARNING_CODE, "Cannot authentication on stock exchange. Contionue without authentication...");
+        emit sendLogMsg(STOCK_ID, MSG_CODE::WARNING_CODE, "Cannot authentication on stock exchange. Contionue without authentication...");
         sendUpdateSecurities(_startLine);
         break;
     case RequestType::UPDATE_SECURITIES:
@@ -159,7 +159,7 @@ void Moex::errorOccurredHTTP(QNetworkReply::NetworkError code, quint64 serverCod
     _requests.erase(id);
 }
 
-void Moex::sendLogMsgHTTP(Common::TDBLoger::MSG_CODE category, const QString &msg, quint64 id)
+void Moex::sendLogMsgHTTP(Common::MSG_CODE category, const QString &msg, quint64 id)
 {
     emit sendLogMsg(STOCK_ID, category, QString("HTTP request %1: %2").arg(id).arg(msg));
 }
@@ -178,7 +178,7 @@ void Moex::getKLinesPool(const TradingCatCommon::PKLinesList &klines)
         end = std::max(end, kline->closeTime);
     }
 
-    emit sendLogMsg(STOCK_ID, Common::TDBLoger::MSG_CODE::INFORMATION_CODE, QString("Get new klines: %1. Count: %2 from %3 to %4")
+    emit sendLogMsg(STOCK_ID, Common::MSG_CODE::INFORMATION_CODE, QString("Get new klines: %1. Count: %2 from %3 to %4")
                                                                                 .arg(klines->begin()->get()->id.toString())
                                                                                 .arg(klines->size())
                                                                                 .arg(QDateTime::fromMSecsSinceEpoch(start).toString(SIMPLY_DATETIME_FORMAT))
@@ -193,7 +193,7 @@ void Moex::errorOccurredPool(Common::EXIT_CODE errorCode, const QString &errorSt
     emit errorOccurred(STOCK_ID, errorCode, QString("KLines Pool error: %1").arg(errorString));
 }
 
-void Moex::sendLogMsgPool(Common::TDBLoger::MSG_CODE category, const QString &msg)
+void Moex::sendLogMsgPool(Common::MSG_CODE category, const QString &msg)
 {
     emit sendLogMsg(STOCK_ID, category, QString("KLines Pool: %1").arg(msg));
 }
@@ -215,7 +215,7 @@ void Moex::sendUpdateSecurities(quint32 startLine)
 
     if (startLine == 0)
     {
-        emit sendLogMsg(STOCK_ID, TDBLoger::MSG_CODE::INFORMATION_CODE, QString("Start search for the list of securities"));
+        emit sendLogMsg(STOCK_ID, MSG_CODE::INFORMATION_CODE, QString("Start search for the list of securities"));
     }
 
     QUrlQuery urlQuery;
@@ -240,7 +240,7 @@ void Moex::restartUpdateSecurities()
     _startLine = 0;
     QTimer::singleShot(60 * 1000, this, [this](){ this->sendUpdateSecurities(_startLine); });
 
-    emit sendLogMsg(STOCK_ID, TDBLoger::MSG_CODE::WARNING_CODE, QString("The search for the list of securities failed with an error. Retry after 60 s"));
+    emit sendLogMsg(STOCK_ID, MSG_CODE::WARNING_CODE, QString("The search for the list of securities failed with an error. Retry after 60 s"));
 }
 
 void Moex::parseSecurities(const QByteArray &answer)
@@ -410,7 +410,7 @@ void Moex::parseSecurities(const QByteArray &answer)
     }
     catch (const ParseException& err)
     {
-        emit sendLogMsg(STOCK_ID, TDBLoger::MSG_CODE::WARNING_CODE, QString("Error parse JSON securities: %1").arg(err.what()));
+        emit sendLogMsg(STOCK_ID, MSG_CODE::WARNING_CODE, QString("Error parse JSON securities: %1").arg(err.what()));
 
         restartUpdateSecurities();
 
@@ -423,7 +423,7 @@ void Moex::parseSecurities(const QByteArray &answer)
     }
     else
     {
-        emit sendLogMsg(STOCK_ID, TDBLoger::MSG_CODE::INFORMATION_CODE, QString("The earch for the list of securities complite successfully"));
+        emit sendLogMsg(STOCK_ID, MSG_CODE::INFORMATION_CODE, QString("The earch for the list of securities complite successfully"));
 
         _startLine = 0;
 
@@ -458,7 +458,7 @@ void Moex::makeKLines()
         }
     }
 
-    emit sendLogMsg(STOCK_ID, TDBLoger::MSG_CODE::INFORMATION_CODE, QString("Securities list update successfully. Added: %1. Erased: %2. Total: %3")
+    emit sendLogMsg(STOCK_ID, MSG_CODE::INFORMATION_CODE, QString("Securities list update successfully. Added: %1. Erased: %2. Total: %3")
                                                               .arg(addCount)
                                                               .arg(eraseCount)
                                                               .arg(_pool->klineCount()));

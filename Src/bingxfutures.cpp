@@ -11,26 +11,26 @@
 #include <Common/parser.h>
 #include <TradingCatCommon/detector.h>
 
-#include "StockExchange/okxkline.h"
+#include "StockExchange/bingxklinefutures.h"
 
-#include "StockExchange/okx.h"
+#include "StockExchange/bingxfutures.h"
 
 using namespace Common;
 using namespace TradingCatCommon;
 using namespace StockExchange;
 
 //static
-Q_GLOBAL_STATIC_WITH_ARGS(const QUrl, BASE_URL, ("https://www.okx.com/"));
+Q_GLOBAL_STATIC_WITH_ARGS(const QUrl, BASE_URL, ("https://open-api.bingx.com/"));
 
 constexpr const qint64 UPDATE_KLINES_INTERAL = 60 * 10000;
 constexpr const qint64 RESTART_KLINES_INTERAL = 60 * 1000;
 
-const StockExchangeID Okx::STOCK_ID("OKX");
+const StockExchangeID BingxFutures::STOCK_ID("BINGX_FUTURES");
 
 ///////////////////////////////////////////////////////////////////////////////
-/// class Okx
+/// class Bingx
 ///
-Okx::Okx(const StockExchange::StockExchangeConfig& config, const Common::ProxyList& proxyList, QObject *parent)
+BingxFutures::BingxFutures(const StockExchange::StockExchangeConfig& config, const Common::ProxyList& proxyList, QObject *parent /* = nullptr */)
     : IStockExchange{STOCK_ID, parent}
     , _config(config)
     , _proxyList(proxyList)
@@ -38,12 +38,12 @@ Okx::Okx(const StockExchange::StockExchangeConfig& config, const Common::ProxyLi
     _headers.insert(QByteArray{"Content-Type"}, QByteArray{"application/json"});
 }
 
-Okx::~Okx()
+BingxFutures::~BingxFutures()
 {
     stop();
 }
 
-void Okx::start()
+void BingxFutures::start()
 {
     Q_ASSERT(!_isStarted);
 
@@ -68,7 +68,6 @@ void Okx::start()
         QObject::connect(_pool, SIGNAL(sendLogMsg(Common::MSG_CODE, const QString&)),
                          SLOT(sendLogMsgPool(Common::MSG_CODE, const QString&)));
 
-
         if (!_config.user.isEmpty())
         {
             _pool->setUserPassword(_config.user, _config.password);
@@ -80,7 +79,7 @@ void Okx::start()
     sendUpdateMoney();
 }
 
-void Okx::stop()
+void BingxFutures::stop()
 {
     if (!_isStarted)
     {
@@ -97,19 +96,19 @@ void Okx::stop()
     emit finished();
 }
 
-void Okx::getAnswerHTTP(const QByteArray &answer, quint64 id)
+void BingxFutures::getAnswerHTTP(const QByteArray &answer, quint64 id)
 {
     if (id != _currentRequestId)
     {
         return;
     }
 
-    _currentRequestId = 0;
+    _currentRequestId= 0;
 
     parseMoney(answer);
 }
 
-void Okx::errorOccurredHTTP(QNetworkReply::NetworkError code, quint64 serverCode, const QString &msg, quint64 id, const QByteArray& answer)
+void BingxFutures::errorOccurredHTTP(QNetworkReply::NetworkError code, quint64 serverCode, const QString &msg, quint64 id, const QByteArray& answer)
 {
     Q_UNUSED(code);
     Q_UNUSED(serverCode);
@@ -118,19 +117,46 @@ void Okx::errorOccurredHTTP(QNetworkReply::NetworkError code, quint64 serverCode
     {
         return;
     }
+
     _currentRequestId = 0;
 
-    emit sendLogMsg(STOCK_ID, Common::MSG_CODE::WARNING_CODE, QString("HTTP request %1 failed with an error: %2").arg(id).arg(msg));
+    QString errorMsg = "EMPTY";
+    if (!answer.isEmpty())
+    {
+        try
+        {
+            const auto rootJson = JSONParseToMap(answer);
+
+            if (rootJson.contains("code"))
+            {
+                const auto code = JSONReadMapNumber<qint64>(rootJson, "code", "Root/code").value_or(0);
+                const auto msg = JSONReadMapString(rootJson, "msg", "Root/msg").value_or("");
+
+                errorMsg = QString("Stock exchange return error. Code: %1 Message: %2").arg(code).arg(msg);
+            }
+        }
+        catch (const ParseException& err)
+        {
+            emit sendLogMsg(STOCK_ID, MSG_CODE::WARNING_CODE, QString("Error parse JSON error data: %1. Source data: %2").arg(err.what()).arg(answer));
+        }
+    }
+
+    emit sendLogMsg(STOCK_ID, Common::MSG_CODE::WARNING_CODE,
+                    QString("HTTP request %1 failed with an error: %2. Addition data: %3. Retry after %4s")
+                        .arg(id)
+                        .arg(msg)
+                        .arg(errorMsg)
+                        .arg(RESTART_KLINES_INTERAL / 1000));
 
     restartUpdateMoney();
 }
 
-void Okx::sendLogMsgHTTP(Common::MSG_CODE category, const QString &msg, quint64 id)
+void BingxFutures::sendLogMsgHTTP(Common::MSG_CODE category, const QString &msg, quint64 id)
 {
     emit sendLogMsg(STOCK_ID, category, QString("HTTP request %1: %2").arg(id).arg(msg));
 }
 
-void Okx::getKLinesPool(const TradingCatCommon::PKLinesList &klines)
+void BingxFutures::getKLinesPool(const TradingCatCommon::PKLinesList &klines)
 {
     Q_ASSERT(!klines->empty());
 
@@ -154,43 +180,38 @@ void Okx::getKLinesPool(const TradingCatCommon::PKLinesList &klines)
     emit getKLines(STOCK_ID, klines);
 }
 
-
-void Okx::errorOccurredPool(Common::EXIT_CODE errorCode, const QString &errorString)
+void BingxFutures::errorOccurredPool(Common::EXIT_CODE errorCode, const QString &errorString)
 {
     emit errorOccurred(STOCK_ID, errorCode, QString("KLines Pool error: %1").arg(errorString));
 }
 
-void Okx::sendLogMsgPool(Common::MSG_CODE category, const QString &msg)
+void BingxFutures::sendLogMsgPool(Common::MSG_CODE category, const QString &msg)
 {
     emit sendLogMsg(STOCK_ID, category, QString("KLines Pool: %1").arg(msg));
 }
 
-
-void Okx::sendUpdateMoney()
+void BingxFutures::sendUpdateMoney()
 {
     Q_CHECK_PTR(_http);
 
     Q_ASSERT(_currentRequestId == 0);
     Q_ASSERT(_isStarted);
 
-    QUrlQuery query;
-    query.addQueryItem("instType", "SPOT");
-
     QUrl url(*BASE_URL);
-    url.setPath("/api/v5/public/instruments");
-    url.setQuery(query);
+
+    url.setPath("/openApi/swap/v2/quote/contracts");
 
     _currentRequestId = _http->send(url, Common::HTTPSSLQuery::RequestType::GET);
 }
 
-void Okx::restartUpdateMoney()
+void BingxFutures::restartUpdateMoney()
 {
     QTimer::singleShot(RESTART_KLINES_INTERAL, this, [this](){ if (_isStarted) this->sendUpdateMoney(); });
 
     emit sendLogMsg(STOCK_ID, MSG_CODE::WARNING_CODE, QString("The search for the list of KLines failed with an error. Retry after 60 s"));
 }
 
-void Okx::parseMoney(const QByteArray &answer)
+void BingxFutures::parseMoney(const QByteArray &answer)
 {
     auto money = std::make_shared<TradingCatCommon::KLinesIDList>(); ///< Список доступных свечей
 
@@ -199,11 +220,25 @@ void Okx::parseMoney(const QByteArray &answer)
         std::list<QString> symbols; ///< Список доступных инструментов
 
         const auto rootJson = JSONParseToMap(answer);
+        const auto code = JSONReadMapNumber<qint64>(rootJson, "code", "Root/code").value_or(0);
+        if (code != 0)
+        {
+            const auto msg = JSONReadMapString(rootJson, "msg", "Root/msg").value_or("");
+
+            throw ParseException(QString("Stock exchange return error. Code: %1 Message: %2").arg(code).arg(msg));
+        }
+
         const auto dataJson = JSONReadMapToArray(rootJson, "data", "Root/data");
         for (const auto& symbolDataValueJson: dataJson)
         {
-            const auto symbolDataJson = JSONReadMap(symbolDataValueJson, "Root/data/[]");
-            const auto moneyName = JSONReadMapString(symbolDataJson, "instId", "Root/symbols/[]", false);
+            const auto symbolDataJson = JSONReadMap(symbolDataValueJson, "Root/data/symbols/[]");
+            const auto status = JSONReadMapNumber<qint8>(symbolDataJson, "status", "Root/data/symbols/[]/status");
+            if (status != 1)
+            {
+                continue;
+            }
+
+            const auto moneyName = JSONReadMapString(symbolDataJson, "symbol", "Root/data/symbols/[]", false);
             if (moneyName.has_value())
             {
                 const auto& moneyNameStr = moneyName.value();
@@ -264,7 +299,7 @@ void Okx::parseMoney(const QByteArray &answer)
     QTimer::singleShot(UPDATE_KLINES_INTERAL, this, [this](){ if (_isStarted) sendUpdateMoney(); });
 }
 
-void Okx::makeKLines(const TradingCatCommon::PKLinesIDList klinesIdList)
+void BingxFutures::makeKLines(const TradingCatCommon::PKLinesIDList klinesIdList)
 {
     quint32 addKLineCount = 0;
     quint32 eraseKLineCount = 0;
@@ -292,7 +327,7 @@ void Okx::makeKLines(const TradingCatCommon::PKLinesIDList klinesIdList)
     {
         if (!_pool->isExitsKLine(klineId))
         {
-            auto kline = std::make_unique<OkxKLine>(klineId, QDateTime::currentDateTime().addMSecs(-static_cast<qint64>(klineId.type) * KLINES_COUNT_HISTORY));;
+            auto kline = std::make_unique<BingxKLineFutures>(klineId, QDateTime::currentDateTime().addMSecs(-static_cast<qint64>(klineId.type) * KLINES_COUNT_HISTORY));;
 
             _pool->addKLine(std::move(kline));
 

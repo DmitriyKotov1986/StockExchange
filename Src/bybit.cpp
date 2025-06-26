@@ -30,7 +30,7 @@ const StockExchangeID Bybit::STOCK_ID("BYBIT");
 ///////////////////////////////////////////////////////////////////////////////
 /// class Bybit
 ///
-Bybit::Bybit(const StockExchange::StockExchangeConfig& config, const Common::HTTPSSLQuery::ProxyList& proxyList, QObject *parent)
+Bybit::Bybit(const StockExchange::StockExchangeConfig& config, const Common::ProxyList& proxyList, QObject *parent)
     : IStockExchange{STOCK_ID, parent}
     , _config(config)
     , _proxyList(proxyList)
@@ -54,8 +54,8 @@ void Bybit::start()
                      SLOT(getAnswerHTTP(const QByteArray&, quint64)));
     QObject::connect(_http, SIGNAL(errorOccurred(QNetworkReply::NetworkError, quint64, const QString&, quint64, const QByteArray&)),
                      SLOT(errorOccurredHTTP(QNetworkReply::NetworkError, quint64, const QString&, quint64, const QByteArray&)));
-    QObject::connect(_http, SIGNAL(sendLogMsg(Common::TDBLoger::MSG_CODE, const QString&, quint64)),
-                     SLOT(sendLogMsgHTTP(Common::TDBLoger::MSG_CODE, const QString&, quint64)));
+    QObject::connect(_http, SIGNAL(sendLogMsg(Common::MSG_CODE, const QString&, quint64)),
+                     SLOT(sendLogMsgHTTP(Common::MSG_CODE, const QString&, quint64)));
 
     if (!_pool)
     {
@@ -65,8 +65,8 @@ void Bybit::start()
                          SLOT(getKLinesPool(const TradingCatCommon::PKLinesList&)));
         QObject::connect(_pool, SIGNAL(errorOccurred(Common::EXIT_CODE, const QString&)),
                          SLOT(errorOccurredPool(Common::EXIT_CODE, const QString&)));
-        QObject::connect(_pool, SIGNAL(sendLogMsg(Common::TDBLoger::MSG_CODE, const QString&)),
-                         SLOT(sendLogMsgPool(Common::TDBLoger::MSG_CODE, const QString&)));
+        QObject::connect(_pool, SIGNAL(sendLogMsg(Common::MSG_CODE, const QString&)),
+                         SLOT(sendLogMsgPool(Common::MSG_CODE, const QString&)));
 
 
         if (!_config.user.isEmpty())
@@ -120,12 +120,12 @@ void Bybit::errorOccurredHTTP(QNetworkReply::NetworkError code, quint64 serverCo
     }
     _currentRequestId = 0;
 
-    emit sendLogMsg(STOCK_ID, Common::TDBLoger::MSG_CODE::WARNING_CODE, QString("HTTP request %1 failed with an error: %2").arg(id).arg(msg));
+    emit sendLogMsg(STOCK_ID, Common::MSG_CODE::WARNING_CODE, QString("HTTP request %1 failed with an error: %2").arg(id).arg(msg));
 
     restartUpdateMoney();
 }
 
-void Bybit::sendLogMsgHTTP(Common::TDBLoger::MSG_CODE category, const QString &msg, quint64 id)
+void Bybit::sendLogMsgHTTP(Common::MSG_CODE category, const QString &msg, quint64 id)
 {
     emit sendLogMsg(STOCK_ID, category, QString("HTTP request %1: %2").arg(id).arg(msg));
 }
@@ -144,7 +144,7 @@ void Bybit::getKLinesPool(const TradingCatCommon::PKLinesList &klines)
         end = std::max(end, kline->closeTime);
     }
 
-    emit sendLogMsg(STOCK_ID, Common::TDBLoger::MSG_CODE::INFORMATION_CODE, QString("Get new klines: %1. Count: %2 from %3 to %4")
+    emit sendLogMsg(STOCK_ID, Common::MSG_CODE::INFORMATION_CODE, QString("Get new klines: %1. Count: %2 from %3 to %4")
                                                                                 .arg(klines->begin()->get()->id.toString())
                                                                                 .arg(klines->size())
                                                                                 .arg(QDateTime::fromMSecsSinceEpoch(start).toString(SIMPLY_DATETIME_FORMAT))
@@ -160,7 +160,7 @@ void Bybit::errorOccurredPool(Common::EXIT_CODE errorCode, const QString &errorS
     emit errorOccurred(STOCK_ID, errorCode, QString("KLines Pool error: %1").arg(errorString));
 }
 
-void Bybit::sendLogMsgPool(Common::TDBLoger::MSG_CODE category, const QString &msg)
+void Bybit::sendLogMsgPool(Common::MSG_CODE category, const QString &msg)
 {
     emit sendLogMsg(STOCK_ID, category, QString("KLines Pool: %1").arg(msg));
 }
@@ -187,7 +187,7 @@ void Bybit::restartUpdateMoney()
 {
     QTimer::singleShot(RESTART_KLINES_INTERAL, this, [this](){ if (_isStarted) this->sendUpdateMoney(); });
 
-    emit sendLogMsg(STOCK_ID, TDBLoger::MSG_CODE::WARNING_CODE, QString("The search for the list of KLines failed with an error. Retry after 60 s"));
+    emit sendLogMsg(STOCK_ID, MSG_CODE::WARNING_CODE, QString("The search for the list of KLines failed with an error. Retry after 60 s"));
 }
 
 void Bybit::parseMoney(const QByteArray &answer)
@@ -249,14 +249,14 @@ void Bybit::parseMoney(const QByteArray &answer)
     }
     catch (const ParseException& err)
     {
-        emit sendLogMsg(STOCK_ID, TDBLoger::MSG_CODE::WARNING_CODE, QString("Error parse JSON money list: %1").arg(err.what()));
+        emit sendLogMsg(STOCK_ID, MSG_CODE::WARNING_CODE, QString("Error parse JSON money list: %1").arg(err.what()));
 
         restartUpdateMoney();
 
         return;
     }
 
-    emit sendLogMsg(STOCK_ID, TDBLoger::MSG_CODE::INFORMATION_CODE, QString("The earch for the list of money list complite successfully"));
+    emit sendLogMsg(STOCK_ID, MSG_CODE::INFORMATION_CODE, QString("The earch for the list of money list complite successfully"));
 
     makeKLines(money);
 
@@ -310,7 +310,7 @@ void Bybit::makeKLines(const TradingCatCommon::PKLinesIDList klinesIdList)
         }
     }
 
-    emit sendLogMsg(STOCK_ID, TDBLoger::MSG_CODE::INFORMATION_CODE, QString("KLines list update successfully. Added: %1. Erased: %2. Total: %3")
+    emit sendLogMsg(STOCK_ID, MSG_CODE::INFORMATION_CODE, QString("KLines list update successfully. Added: %1. Erased: %2. Total: %3")
                                                                         .arg(addKLineCount)
                                                                         .arg(eraseKLineCount)
                                                                         .arg(_pool->klineCount()));
