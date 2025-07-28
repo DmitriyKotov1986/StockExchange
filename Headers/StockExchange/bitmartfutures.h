@@ -16,7 +16,7 @@
 namespace StockExchange
 {
 
-class Bitmart final
+class BitmartFutures final
     : public StockExchange::IStockExchange
 {
     Q_OBJECT
@@ -25,8 +25,8 @@ public:
     static const TradingCatCommon::StockExchangeID STOCK_ID;
 
 public:
-    Bitmart(const StockExchange::StockExchangeConfig& config, const Common::ProxyList& proxyList, QObject* parent = nullptr);
-    ~Bitmart() override;
+    BitmartFutures(const StockExchange::StockExchangeConfig& config, const Common::ProxyList& proxyList, QObject* parent = nullptr);
+    ~BitmartFutures() override;
 
     void start() override;
     void stop() override;
@@ -41,8 +41,8 @@ private slots:
     void sendLogMsgPool(Common::MSG_CODE category, const QString& msg);
 
 private:
-    Bitmart() = delete;
-    Q_DISABLE_COPY_MOVE(Bitmart);
+    BitmartFutures() = delete;
+    Q_DISABLE_COPY_MOVE(BitmartFutures);
 
     void sendUpdateMoney();
     void restartUpdateMoney();

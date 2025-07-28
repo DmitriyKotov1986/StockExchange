@@ -14,6 +14,8 @@ HEADERS += \
     $$PWD/Headers/StockExchange/bitgetkline.h \
     $$PWD/Headers/StockExchange/bitmart.h \
     $$PWD/Headers/StockExchange/bitmartkline.h \
+    $$PWD/Headers/StockExchange/bitmartfutures.h \
+    $$PWD/Headers/StockExchange/bitmartklinefutures.h \
     $$PWD/Headers/StockExchange/bitgetfutures.h \
     $$PWD/Headers/StockExchange/bitgetklinefutures.h \
     $$PWD/Headers/StockExchange/bybit.h \
@@ -33,8 +35,8 @@ HEADERS += \
     $$PWD/Headers/StockExchange/mexcfutures.h \
     $$PWD/Headers/StockExchange/mexcklinefutures.h \
 #    $$PWD/Headers/StockExchange/mexcmoney.h \
-    $$PWD/Headers/StockExchange/moex.h \
-    $$PWD/Headers/StockExchange/moexkline.h \
+#    $$PWD/Headers/StockExchange/moex.h \
+#    $$PWD/Headers/StockExchange/moexkline.h \
     $$PWD/Headers/StockExchange/okx.h \
     $$PWD/Headers/StockExchange/okxkline.h \
     $$PWD/Headers/StockExchange/htx.h \
@@ -49,6 +51,8 @@ SOURCES += \
     $$PWD/Src/bitgetkline.cpp \
     $$PWD/Src/bitmart.cpp \
     $$PWD/Src/bitmartkline.cpp \
+    $$PWD/Src/bitmartfutures.cpp \
+    $$PWD/Src/bitmartklinefutures.cpp \
     $$PWD/Src/bitgetfutures.cpp \
     $$PWD/Src/bitgetklinefutures.cpp \
     $$PWD/Src/bingx.cpp \
@@ -72,8 +76,8 @@ SOURCES += \
     $$PWD/Src/mexcfutures.cpp \
     $$PWD/Src/mexcklinefutures.cpp \
 #    $$PWD/Src/mexcmoney.cpp \
-    $$PWD/Src/moex.cpp \
-    $$PWD/Src/moexkline.cpp \
+#    $$PWD/Src/moex.cpp \
+#    $$PWD/Src/moexkline.cpp \
     $$PWD/Src/okx.cpp \
     $$PWD/Src/okxkline.cpp \
     $$PWD/Src/htx.cpp \
